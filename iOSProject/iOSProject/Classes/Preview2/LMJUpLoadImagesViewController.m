@@ -7,8 +7,8 @@
 //
 
 #import "LMJUpLoadImagesViewController.h"
-#import <TZImagePickerController.h>
 #import "LMJUpLoadImageCell.h"
+#import <TZImagePickerController.h>
 #import <AVFoundation/AVFoundation.h>
 #import <TZImageManager.h>
 #import <TZLocationManager.h>
@@ -35,9 +35,10 @@ static const NSInteger maxPhotoCount = 9;
         _imagePickerVc.delegate = self;
         // set appearance / 改变相册选择页的导航栏外观
         if (iOS7Later) {
-            _imagePickerVc.navigationBar.barTintColor = self.navigationController.navigationBar.barTintColor;
+            _imagePickerVc.navigationBar.barTintColor = [UIColor greenColor];
         }
-        _imagePickerVc.navigationBar.tintColor = self.navigationController.navigationBar.tintColor;
+        // 红色
+        _imagePickerVc.navigationBar.tintColor = [UIColor redColor];
         UIBarButtonItem *tzBarItem, *BarItem;
         if (iOS9Later) {
             tzBarItem = [UIBarButtonItem appearanceWhenContainedInInstancesOfClasses:@[[TZImagePickerController class]]];
@@ -64,7 +65,7 @@ static const NSInteger maxPhotoCount = 9;
 
 - (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath {
     LMJUpLoadImageCell *cell = [collectionView dequeueReusableCellWithReuseIdentifier:NSStringFromClass([LMJUpLoadImageCell class]) forIndexPath:indexPath];
-    LMJWeakSelf(self);
+    LMJWeak(self);
     if (indexPath.item == self.selectedImages.count) {
         cell.photoImage = nil;
         cell.addPhotoClick = ^(LMJUpLoadImageCell *uploadImageCell) {
@@ -168,9 +169,9 @@ static const NSInteger maxPhotoCount = 9;
      imagePickerVc.delegate = self;
      */
     
-    imagePickerVc.isStatusBarDefault = NO;
+//    imagePickerVc.isStatusBarDefault = NO;
 #pragma mark - 到这里为止
-    LMJWeakSelf(self);
+    LMJWeak(self);
     // You can get the photos by block, the same as by delegate.
     // 你可以通过block或者代理，来得到用户选择的照片.
     [imagePickerVc setDidFinishPickingPhotosHandle:^(NSArray<UIImage *> *photos, NSArray *assets, BOOL isSelectOriginalPhoto) {
@@ -247,9 +248,9 @@ static const NSInteger maxPhotoCount = 9;
 - (void)pushImagePickerController {
     // 提前定位
     __weak typeof(self) weakSelf = self;
-    [[TZLocationManager manager] startLocationWithSuccessBlock:^(CLLocation *location, CLLocation *oldLocation) {
+    [[TZLocationManager manager] startLocationWithSuccessBlock:^(NSArray<CLLocation *> *locations) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
-        strongSelf.location = location;
+        strongSelf.location = locations.lastObject;
     } failureBlock:^(NSError *error) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
         strongSelf.location = nil;
@@ -282,14 +283,14 @@ static const NSInteger maxPhotoCount = 9;
                 [tzImagePickerVc hideProgressHUD];
                 NSLog(@"图片保存失败 %@",error);
             } else {
-                [[TZImageManager manager] getCameraRollAlbum:NO allowPickingImage:YES completion:^(TZAlbumModel *model) {
+                [[TZImageManager manager] getCameraRollAlbum:NO allowPickingImage:YES needFetchAssets:YES completion:^(TZAlbumModel *model) {
                     [[TZImageManager manager] getAssetsFromFetchResult:model.result allowPickingVideo:NO allowPickingImage:YES completion:^(NSArray<TZAssetModel *> *models) {
                         [tzImagePickerVc hideProgressHUD];
                         TZAssetModel *assetModel = [models firstObject];
                         if (tzImagePickerVc.sortAscendingByModificationDate) {
                             assetModel = [models lastObject];
                         }
-                        if (YES) { // 允许裁剪,去裁剪
+                        if (/* DISABLES CODE */ (NO)) { // 允许裁剪,去裁剪
                             TZImagePickerController *imagePicker = [[TZImagePickerController alloc] initCropTypeWithAsset:assetModel.asset photo:image completion:^(UIImage *cropImage, id asset) {
                                 [self refreshCollectionViewWithAddedAsset:asset image:cropImage];
                             }];
@@ -297,7 +298,7 @@ static const NSInteger maxPhotoCount = 9;
                             imagePicker.circleCropRadius = 100;
                             [self presentViewController:imagePicker animated:YES completion:nil];
                         } else {
-//                            [self refreshCollectionViewWithAddedAsset:assetModel.asset image:image];
+                            [self refreshCollectionViewWithAddedAsset:assetModel.asset image:image];
                         }
                     }];
                 }];
@@ -333,14 +334,16 @@ static const NSInteger maxPhotoCount = 9;
     }
 
     MBProgressHUD *hud = [MBProgressHUD showProgressToView:self.view Text:@"传输中"];
-    NSString *mineType = @"application/octet-stream";
     NSString *name = @"file";
-    [[LMJRequestManager sharedManager] upload:[LMJXMGBaseUrl stringByAppendingPathComponent:@"upload"] parameters:@{@"username" : @"NJHu"} formDataBlock:^(id<AFMultipartFormData> formData) {
+    [[LMJRequestManager sharedManager] upload:[LMJXMGBaseUrl stringByAppendingPathComponent:@"upload"] parameters:@{@"username" : @"NJHu"} formDataBlock:^NSDictionary<NSData *,LMJDataName *> *(id<AFMultipartFormData> formData, NSMutableDictionary<NSData *,LMJDataName *> *needFillDataDict) {
         
         [self.selectedImages enumerateObjectsUsingBlock:^(UIImage * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
             // 压缩率控制
-            [formData appendPartWithFileData:UIImageJPEGRepresentation(obj, 1) name:name fileName:@"test.png" mimeType:mineType];
+//            [formData appendPartWithFileData:UIImageJPEGRepresentation(obj, 1) name:name fileName:@"test.png" mimeType:mineType];
+            needFillDataDict[UIImageJPEGRepresentation(obj, 1)] = name;
         }];
+        
+        return needFillDataDict;
         
     } progress:^(NSProgress *progress) {
         
